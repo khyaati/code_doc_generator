@@ -1,6 +1,11 @@
 import torch
 from transformers import RobertaTokenizer, T5ForConditionalGeneration
 from flask_caching import Cache
+import logging 
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Model configuration
 MODEL_NAME = "Salesforce/codet5-small"
@@ -43,5 +48,10 @@ def generate_comments(code, comment_style="brief"):
         commented_code = tokenizer.decode(output_ids[0], skip_special_tokens=True)
         return commented_code
     
+    except torch.cuda.OutOfMemoryError as e:
+        logger.error(f"CUDA Out-of-Memory error during model inference: {e}")
+        return "Error: CUDA Out-of-Memory. Please try with smaller code snippets"
+
     except Exception as e:
+        logger.error(f"Error generating comments: {str(e)}")
         return f"Error generating comments: {str(e)}"
