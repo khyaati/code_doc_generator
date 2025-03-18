@@ -6,6 +6,20 @@ document.addEventListener("DOMContentLoaded", function () {
     let dropZone = document.querySelector(".dropzone");
     dropZone.addEventListener("drop", dropHandler);
     dropZone.addEventListener("dragover", dragOverHandler);
+
+    // Language Change Handling
+    document.getElementById("languageSelect").addEventListener("change", function(){
+        let language = this.value;
+        if (language !== "auto"){
+            monaco.editor.setModelLanguage(window.editor.getModel(), language);
+        }
+    });
+
+    // Monaco Editor Change Listener
+    window.editor.onDidChangeModelContent(function() {
+        setTimeout(adjustEditorHeight, 50); // Delay the height adjustment
+    });
+
 });
 
 // Handle File Upload
@@ -15,7 +29,8 @@ function handleFileUpload(event) {
 
     let reader = new FileReader();
     reader.onload = function (e) {
-        document.getElementById("codeInput").value = e.target.result;
+        window.editor.setValue(e.target.result); // Set code in Monaco Editor
+        setTimeout(adjustEditorHeight, 50); // Delay height adjustment after file upload
     };
     reader.readAsText(file);
 }
@@ -33,26 +48,34 @@ function dropHandler(event) {
 
     let reader = new FileReader();
     reader.onload = function (e) {
-        document.getElementById("codeInput").value = e.target.result;
+        window.editor.setValue(e.target.result); // Set code in Monaco Editor
+        setTimeout(adjustEditorHeight, 50); // Delay height adjustment after file drop
     };
     reader.readAsText(file);
 }
 
+// Adjust Editor Height Dynamically
+function adjustEditorHeight() {
+    let contentHeight = window.editor.getContentHeight();
+    document.getElementById("codeInput").style.height = contentHeight + "px";
+    window.editor.layout(); // Force Monaco to re-layout
+}
+
 // Process Code
 function processCode() {
-    let code = document.getElementById("codeInput").value.trim();
+    let code = window.editor.getValue().trim(); // Get code from Monaco Editor
     if (!code) {
         alert("Please enter some code!");
         return;
     }
-
+    let language = document.getElementById("languageSelect").value;
     let progressBar = document.getElementById("progressBar");
     progressBar.style.width = "50%";
     progressBar.innerText = "Processing...";
 
     fetch("/upload", {
         method: "POST",
-        body: JSON.stringify({ code: code, comment_style: "brief" }),
+        body: JSON.stringify({ code: code, comment_style: "brief", language: language }),
         headers: { "Content-Type": "application/json" }
     })
     .then(response => response.json())

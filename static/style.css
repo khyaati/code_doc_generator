@@ -1,6 +1,6 @@
 /* General Styling */
 body {
-    background-color: #f8f9fa;
+    transition: background-color 0.3s, color 0.3s;
 }
 
 /* Navbar Spacing */
