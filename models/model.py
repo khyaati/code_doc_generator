@@ -4,22 +4,23 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 # Define model name
-MODEL_NAME = "E:/Desktop/models/santacoder"
+# MODEL_NAME = "E:/Desktop/models/santacoder"
 
 # Load tokenizer
-tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+tokenizer = AutoTokenizer.from_pretrained("E:/Desktop/models/santacoder")
 
 # Load model
 model = AutoModelForCausalLM.from_pretrained(
-    MODEL_NAME,
-    torch_dtype=torch.float32 if DEVICE == "cpu" else torch.float16,
-    device_map="auto"
+    "E:/Desktop/models/santacoder",
+    torch_dtype=torch.float16,
+    device_map="auto",
+    offload_folder="E:/Desktop/models/santacoder"
 )
 
 def generate_code_comments(code, language="auto"):
     """Generates comments for the given code snippet."""
     prompt = f"### Code in {language}:\n{code}\n### Add helpful comments:\n"
-    inputs = tokenizer(prompt, return_tensors="pt").to(DEVICE)
+    inputs = tokenizer(prompt, return_tensors="pt")
 
     with torch.no_grad():
         outputs = model.generate(**inputs, max_length=512, do_sample=True, temperature=0.7, top_k=50)
