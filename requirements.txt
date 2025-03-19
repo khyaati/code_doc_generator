@@ -1,12 +1,7 @@
 flask
-flask-cors
 torch
 transformers
 accelerate
-bitsandbytes
-auto-gptq
 pygments
-monaco-editor
-highlight.js
 
 # To install the dependencies: pip install -r requirements.txt
