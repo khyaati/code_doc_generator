@@ -63,13 +63,15 @@ function adjustEditorHeight() {
 
 // Process Code
 function processCode() {
-    let code = window.editor.getValue().trim(); // Get code from Monaco Editor
+    let code = window.editor.getValue().trim();
     if (!code) {
         alert("Please enter some code!");
         return;
     }
+    
     let language = document.getElementById("languageSelect").value;
     let progressBar = document.getElementById("progressBar");
+    
     progressBar.style.width = "50%";
     progressBar.innerText = "Processing...";
 
@@ -80,21 +82,20 @@ function processCode() {
     })
     .then(response => response.json())
     .then(data => {
+        if (data.error) {
+            throw new Error(data.error);
+        }
+
         progressBar.style.width = "100%";
         progressBar.innerText = "Done!";
         document.getElementById("outputContainer").style.display = "block";
         document.getElementById("commentedCode").innerText = data.commented_code;
 
-        // Apply Syntax Highlighting with highlight.js
         hljs.highlightAll();
     })
-    .catch(err => alert("Error processing code: " + err));
-}
-
-// Copy to Clipboard
-function copyToClipboard() {
-    let text = document.getElementById("commentedCode").innerText;
-    navigator.clipboard.writeText(text).then(() => {
-        alert("Copied to clipboard!");
+    .catch(err => {
+        alert("Error: " + err.message);
+        progressBar.style.width = "0%";  // Reset progress bar on error
+        progressBar.innerText = "";
     });
 }
