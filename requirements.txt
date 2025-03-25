@@ -1,7 +1,6 @@
-# To install the dependencies: pip install -r requirements.txt
-
-flask
-torch
-transformers
-accelerate
+Flask
+requests
+python-dotenv
 pygments
+werkzeug
+chardet
