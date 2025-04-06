@@ -1,6 +1,6 @@
-Flask
-requests
-python-dotenv
+flask
+torch
+transformers
 pygments
-werkzeug
-chardet
+pydantic
+cachetools

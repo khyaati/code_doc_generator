@@ -1,73 +1,58 @@
-import os
-import logging
-import requests
-from pygments import lexers
-from pygments.util import ClassNotFound
-from dotenv import load_dotenv
+from transformers import pipeline
+from schemas.code_schemas import CodeInput, CodeOutput
+from cachetools import TTLCache
+import torch
+from config import settings
+import asyncio
 
-# Load API token from .env
-load_dotenv()
-HF_API_TOKEN = os.getenv("HF_API_TOKEN")
-HF_API_URL = "https://api-inference.huggingface.co/models/meta-llama/CodeLlama-7b-hf"
+class CodeProcessor:
+    def __init__(self):
+        self.cache = TTLCache(maxsize=1000, ttl=settings.cache_ttl)
+        self.generator = pipeline(
+            "text-generation",
+            model=settings.model_name,
+            device="cuda" if torch.cuda.is_available() else "cpu",
+            torch_dtype=torch.float16,
+            model_kwargs={
+                "load_in_4bit": settings.quantize,
+                "use_cache": True
+            }
+        )
 
-# Logger setup
-logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+    async def generate_comments(self, input: CodeInput) -> CodeOutput:
+        cache_key = f"{abs(hash(input.code))}:{input.language or 'none'}"
+        
+        if cache_key in self.cache:
+            return self.cache[cache_key]
+        
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None,
+            lambda: self._sync_generate(input, cache_key)
+        )
+        return result
 
-# Supported languages
-LANGUAGES = {
-    "python": "py", "javascript": "js", "cpp": "cpp", "java": "java", "c": "c",
-    "ruby": "rb", "go": "go", "php": "php", "typescript": "ts"
-}
+    def _sync_generate(self, input: CodeInput, cache_key: str) -> CodeOutput:
+        prompt = f"""Add meaningful comments to this {input.language} code:
+        
+        {input.code}
 
-def detect_language(code):
-    """Detect programming language using Pygments."""
-    try:
-        lexer = lexers.guess_lexer(code)
-        lang = lexer.name.split()[0].lower()
-        for key in LANGUAGES:
-            if key == lang or key in lang:
-                logger.info(f"Detected language: {key}")
-                return key
-        logger.warning(f"Ambiguous language detected: {lang}")
-        return "unknown"
-    except ClassNotFound:
-        logger.warning("Language detection failed")
-        return "unknown"
-
-def comment_code(code, language):
-    """Call Code Llama API to add comments to the code."""
-    if len(code) > 5000:
-        return "Error: Code input is too large. Please limit input to 5000 characters."
-
-    headers = {"Authorization": f"Bearer {HF_API_TOKEN}"}
-    prompt = (
-        f"Add detailed comments to the following {language} code, explaining the logic block-by-block:\n\n"
-        f"``` {language}\n{code}\n```"
-    )
-    payload = {
-        "inputs": prompt,
-        "parameters": {"max_new_tokens": 500, "temperature": 0.7, "truncation": True}
-    }
-
-    try:
-        logger.info(f"Sending code to Code Llama API (language: {language})")
-        response = requests.post(HF_API_URL, headers=headers, json=payload, timeout=60)
-        response.raise_for_status()
-
-        response_data = response.json()
-        if isinstance(response_data, list) and response_data and "generated_text" in response_data[0]:
-            result = response_data[0]["generated_text"]
-            try:
-                commented_code = result.split(f"``` {language}\n", 1)[1].split("```")[0]
-                logger.info("Successfully parsed commented code")
-                return commented_code
-            except IndexError:
-                logger.error("API response missing expected code block")
-                return "Error: API returned invalid format"
-        else:
-            logger.error(f"Unexpected API response: {response_data}")
-            return "Error: Unexpected API response format"
-    except requests.exceptions.RequestException as e:
-        logger.error(f"API request failed: {str(e)}")
-        return f"Error: API failure - {str(e)}"
+        Commented Code:
+        """
+        
+        result = self.generator(
+            prompt,
+            max_new_tokens=500,
+            temperature=0.7,
+            do_sample=True,
+            pad_token_id=self.generator.tokenizer.eos_token_id,
+            stop_sequence=["\n\n\n"]
+        )[0]["generated_text"]
+        
+        output = CodeOutput(
+            commented_code=result.split("Commented Code:")[-1].strip(),
+            language=input.language or "plaintext"
+        )
+        
+        self.cache[cache_key] = output
+        return output
