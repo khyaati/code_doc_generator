@@ -1,80 +1,114 @@
+import os
 import torch
-import logging
-import asyncio
-from config import settings
-from flask import Flask, request, jsonify
-from models.model import CodeProcessor
-from schemas.code_schemas import CodeInput
-from concurrent.futures import ThreadPoolExecutor
+from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+from flask import Flask, request, jsonify, send_from_directory
+from flask_cors import CORS
+from huggingface_hub import login
 
-# Initialize Flask app and processor
-app = Flask(__name__)
-processor = CodeProcessor()
+HF_TOKEN = ""  # add your HF token here
+login(token=HF_TOKEN)
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+app = Flask(__name__, static_folder='static', static_url_path='')
+CORS(app)
 
-# Thread pool for async operations
-executor = ThreadPoolExecutor(max_workers=4)
+MODEL_NAME = 'microsoft/Phi-4-mini-instruct'
 
-@app.route('/process-code', methods=['POST'])
-def process_code():
-    """
-    Endpoint to process code and generate comments.
-    Note: Flask doesn't natively support async routes, so we wrap it.
-    """
+MAX_NEW_TOKENS = 512
+TEMPERATURE = 0.3
+TOP_K = 50
+TOP_P = 0.95
+REPETITION_PENALTY = 1.1
+
+quantization_config = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_use_double_quant=True,
+    bnb_4bit_quant_type="nf4",
+    bnb_4bit_compute_dtype=torch.bfloat16
+)
+
+tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, trust_remote_code=True)
+
+model = AutoModelForCausalLM.from_pretrained(
+    MODEL_NAME,
+    trust_remote_code=True,
+    quantization_config=quantization_config,
+    device_map="auto",
+    torch_dtype=torch.bfloat16,
+    low_cpu_mem_usage=True
+)
+
+supported_langs = ['python', 'c', 'cpp', 'java', 'javascript']
+
+
+@app.route("/")
+def index():
+    return send_from_directory(app.static_folder, 'index.html')
+
+
+@app.route("/comment", methods=["POST"])
+def comment_code():
+    data = request.json
+    code = data.get("code", "")
+    language = data.get("language", "").strip().lower()
+
+    if not code:
+        return jsonify({"error": "No code provided"}), 400
+
+    if not language or language not in supported_langs:
+        return jsonify({
+            "error": f"Valid language must be provided. Supported languages: {', '.join(supported_langs)}"
+        }), 400
+
     try:
-        # Validate input
-        data = request.get_json()
-        if not data or 'code' not in data:
-            raise ValueError("Missing required 'code' field")
-        
-        input = CodeInput(**data)
-        
-        # Run async task in executor
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        result = loop.run_until_complete(
-            processor.generate_comments(input)
+        prompt = f"""<|system|>
+You are a helpful AI assistant specialized in code analysis.
+Your task is to analyze code and add clear, concise comments to it.
+
+<|user|>
+Analyze the following {language} code and add meaningful inline comments to explain what each part does.
+Make sure the output includes only the commented version of the code — no extra text before or after.
+
+<CODE>
+{code}
+</CODE>
+
+Commented Code:
+"""
+
+        inputs = tokenizer(
+            prompt, 
+            return_tensors="pt", 
+            truncation=True, 
+            max_length=2048
         )
-        loop.close()
+
+        with torch.inference_mode():
+            outputs = model.generate(
+                **inputs,
+                max_new_tokens=MAX_NEW_TOKENS,
+                temperature=TEMPERATURE,
+                do_sample=True,
+                top_k=TOP_K,
+                top_p=TOP_P,
+                repetition_penalty=REPETITION_PENALTY,
+                pad_token_id=tokenizer.eos_token_id,
+                eos_token_id=tokenizer.eos_token_id
+            )
+
+        full_output = tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+    
+        try:
+            comment = full_output.split("Commented Code:\n", 1)[1].strip()
+        except IndexError:
+            comment = "Failed to generate."
+
         
-        return jsonify({
-            "commented_code": result.commented_code,
-            "language": result.language
-        })
-        
-    except ValueError as e:
-        logger.warning(f"Validation error: {e}")
-        return jsonify({"error": str(e)}), 400
-        
-    except torch.cuda.OutOfMemoryError:
-        logger.error("GPU memory exhausted")
-        return jsonify({
-            "error": "Server overloaded - try a smaller code snippet",
-            "code": "gpu_oom"
-        }), 503
-        
+        return jsonify({"commented code": comment})
+
     except Exception as e:
-        logger.error(f"Processing failed: {e}", exc_info=True)
-        return jsonify({
-            "error": "Internal server error",
-            "code": "server_error"
-        }), 500
+        return jsonify({"error": str(e)}), 500
 
-@app.route('/health', methods=['GET'])
-def health_check():
-    """Health check endpoint"""
-    return jsonify({
-        "status": "healthy",
-        "model": settings.model_name,
-        "device": processor.device
-    })
 
-if __name__ == '__main__':
-    app.run(
-        host=settings.host,
-        port=settings.port,
-        threaded=True  # Required for concurrent requests
-    )
+if __name__ == "__main__":
+    app.run(debug=False)

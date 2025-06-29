@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Code Doc Generator</title>
+  <link rel="stylesheet" href="style.css" />
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/codemirror.min.css"> 
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/theme/dracula.min.css"> 
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/codemirror.min.js"></script> 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/mode/python/python.min.js"></script> 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/mode/clike/clike.min.js"></script> 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/mode/javascript/javascript.min.js"></script> 
+</head>
+
+<body class="light">
+  <div class="container">
+    <h1>Code Doc Generator</h1>
+
+    <label for="language-select">Language:</label>
+    <select id="language-select">
+      <option value="python">Python</option>
+      <option value="c">C</option>
+      <option value="cpp">C++</option>
+      <option value="java">Java</option>
+      <option value="javascript">JavaScript</option>
+    </select>
+
+    <div class="drop-zone" id="drop-zone">
+      Drop your code here or click to upload
+      <input type="file" id="file-input" accept=".py,.c,.cpp,.java,.js" style="display:none;">
+    </div>
+
+    <textarea id="code-editor"></textarea>
+
+    <button id="submit-btn">Generate Comments ▶</button>
+    <div class="progress-bar" id="progress-bar">Processing...</div>
+
+    <pre><code id="output-code"></code></pre>
+
+    <div class="actions">
+      <button onclick="copyCode()">📋 Copy to Clipboard </button>
+      <button onclick="downloadCode()">💾 Download</button>
+    </div>
+
+    <button id="theme-toggle">🌓 Toggle Theme</button>
+  </div>
+
+  
+  <script src="script.js"></script>
+</body>
+</html>
