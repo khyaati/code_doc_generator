@@ -120,7 +120,7 @@ function downloadCode() {
     'cpp': 'cpp',
   };
 
-  const extension = extensionMap[language] || 'txt';
+  const extension = extensionMap[lang] || 'txt';
   const blob = new Blob([codeContent], { type: "text/plain" });
   const a = document.createElement("a");
   
