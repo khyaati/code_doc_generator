@@ -14,7 +14,7 @@ CORS(app)
 MODEL_NAME = 'microsoft/Phi-4-mini-instruct'
 
 MAX_NEW_TOKENS = 512
-TEMPERATURE = 0.3
+TEMPERATURE = 0.2
 TOP_K = 50
 TOP_P = 0.95
 REPETITION_PENALTY = 1.1
@@ -23,7 +23,7 @@ quantization_config = BitsAndBytesConfig(
     load_in_4bit=True,
     bnb_4bit_use_double_quant=True,
     bnb_4bit_quant_type="nf4",
-    bnb_4bit_compute_dtype=torch.bfloat16
+    bnb_4bit_compute_dtype=torch.float16
 )
 
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, trust_remote_code=True)
@@ -33,7 +33,7 @@ model = AutoModelForCausalLM.from_pretrained(
     trust_remote_code=True,
     quantization_config=quantization_config,
     device_map="auto",
-    torch_dtype=torch.bfloat16,
+    torch_dtype=torch.float16,
     low_cpu_mem_usage=True
 )
 
